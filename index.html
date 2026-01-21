@@ -5,6 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Sagaz Motors | Simulador Profissional</title>
   <style>
+    @media print {
+      body{background:#fff;color:#000}
+      .container{box-shadow:none}
+      button,.inputs,.actions{display:none}
+      .header img{max-width:180px}
+      .print-footer{display:block}
+    }
+    .print-footer{display:none;text-align:center;margin-top:20px;font-size:14px;color:#111}
     body{font-family:Arial,sans-serif;background:linear-gradient(135deg,#000,#1a1a1a);color:#f1f1f1;padding:20px}
     .container{max-width:1200px;margin:auto;background:#0b0b0b;padding:30px;border-radius:18px;box-shadow:0 0 30px rgba(255,0,0,.35)}
     .header{text-align:center;margin-bottom:20px}
@@ -31,6 +39,14 @@
 
   <div class="inputs">
     <div>
+      <label>Nome do Cliente</label>
+      <input type="text" id="cliente" placeholder="Nome do cliente" />
+    </div>
+    <div>
+      <label>WhatsApp do Cliente</label>
+      <input type="tel" id="whats" placeholder="DDD + número" />
+    </div>
+    <div>
       <label>Valor do Produto (R$)</label>
       <input type="number" id="valor" value="10000" />
     </div>
@@ -42,10 +58,6 @@
       <label>Taxa de Juros Mensal (%)</label>
       <input type="number" id="taxa" value="1.8" step="0.01" />
     </div>
-    <div>
-      <label>WhatsApp do Cliente</label>
-      <input type="tel" id="whats" value="55" placeholder="55DDDNÚMERO" />
-    </div>
   </div>
 
   <button onclick="liberarVendedor()" style="position:fixed;bottom:10px;right:10px;background:#111;color:#222;font-size:12px;padding:8px 10px;border-radius:8px">área</button>
@@ -53,7 +65,8 @@
   <div class="actions hidden" id="modoBox">
     <button onclick="modo='loja';calcular()">🏪 Sem juros (loja)</button>
     <button onclick="modo='cliente';calcular()">👤 Com juros (cliente)</button>
-    <button style="margin-left:auto" onclick="window.print()">📄 Gerar PDF</button>
+    <button onclick="enviarWhatsApp()">📲 Enviar no WhatsApp</button>
+    <button style="margin-left:auto;padding:10px 14px;font-size:13px" onclick="window.print()">📄 Gerar PDF</button>
   </div>
 
   <table>
@@ -66,6 +79,9 @@
     </thead>
     <tbody id="tabela"></tbody>
   </table>
+  <div class="print-footer">
+    Sagaz Motors • WhatsApp (21) 97287-1998
+  </div>
 </div>
 
 <script>
@@ -75,29 +91,39 @@ let cache = {};
 const valorInput = document.getElementById('valor');
 const freteInput = document.getElementById('frete');
 const taxaInput = document.getElementById('taxa');
+const whatsInput = document.getElementById('whats');
+const clienteInput = document.getElementById('cliente');
 const tabela = document.getElementById('tabela');
 
 function calcular() {
   const valor = Number(valorInput.value) || 0;
   const frete = freteInput ? Number(freteInput.value) || 0 : 0;
-  const taxa = taxaInput ? (Number(taxaInput.value) || 0) / 100 : 0;
+  const taxaPercent = taxaInput ? Number(taxaInput.value) || 0 : 0;
+  const taxa = taxaPercent / 100;
 
   tabela.innerHTML = '';
   cache = {};
 
   for (let p = 12; p <= 24; p++) {
     const total = valor + frete;
-    let parcela;
-    let recebido;
+    let parcela = 0;
+    let recebido = 0;
 
     if (modo === 'cliente') {
-      const montante = valor * Math.pow(1 + taxa, p);
+      // Cliente paga os juros — loja recebe 100% do valor + frete
+      const montante = taxa > 0 ? valor * Math.pow(1 + taxa, p) : valor;
       parcela = (montante + frete) / p;
       recebido = total;
     } else {
+      // Sem juros para o cliente — desconto dos juros fica com a loja
+      const montante = taxa > 0 ? valor * Math.pow(1 + taxa, p) : valor;
       parcela = total / p;
-      recebido = taxa > 0 ? parcela * (1 - Math.pow(1 + taxa, -p)) / taxa : total;
+      const custoJuros = montante - valor;
+      recebido = (valor - custoJuros) + frete;
     }
+
+    // evita valores negativos em casos extremos
+    recebido = Math.max(0, recebido);
 
     cache[p] = { parcela, recebido };
 
@@ -109,6 +135,26 @@ function calcular() {
     `;
     tabela.appendChild(tr);
   }
+}
+
+function enviarWhatsApp() {
+  const nome = clienteInput.value || 'Cliente';
+  let numero = whatsInput.value.replace(/\D/g, '');
+  if (!numero) return alert('Informe o WhatsApp do cliente');
+
+  // adiciona 55 automaticamente
+  if (!numero.startsWith('55')) numero = '55' + numero;
+
+  let mensagem = `Olá, ${nome}! 😊\nÉ um prazer atender você na Sagaz Motors.\nSegue o orçamento conforme combinado:\n\n`;
+
+  Object.keys(cache).forEach(p => {
+    mensagem += `${p}x de ${cache[p].parcela.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}\n`;
+  });
+
+  mensagem += `\nQualquer dúvida, estou à disposição! ⚡🏍️`;
+
+  const url = `https://wa.me/${numero}?text=${encodeURIComponent(mensagem)}`;
+  window.open(url, '_blank');
 }
 
 function liberarVendedor() {
