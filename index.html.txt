@@ -1,0 +1,174 @@
+<PARCELAMENTO SAGAZ MOTORS>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sagaz Motors | Simulador Profissional</title>
+  <style>
+    @media print {
+      body{background:#fff;color:#000}
+      .container{box-shadow:none}
+      button,.inputs,.actions{display:none}
+      .header img{max-width:180px}
+      .print-footer{display:block}
+    }
+    .print-footer{display:none;text-align:center;margin-top:20px;font-size:14px;color:#111}
+    body{font-family:Arial,sans-serif;background:linear-gradient(135deg,#000,#1a1a1a);color:#f1f1f1;padding:20px}
+    .container{max-width:1200px;margin:auto;background:#0b0b0b;padding:30px;border-radius:18px;box-shadow:0 0 30px rgba(255,0,0,.35)}
+    .header{text-align:center;margin-bottom:20px}
+    .header img{max-width:220px}
+    h1{color:#e11d48;margin-top:10px}
+    .inputs{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-top:20px}
+    label{font-size:13px;color:#cbd5e1}
+    input{width:100%;padding:14px;border-radius:10px;border:none;font-size:18px;margin-top:6px}
+    button{background:#e11d48;color:#fff;border:none;padding:14px;border-radius:12px;font-size:15px;cursor:pointer}
+    button:hover{background:#be123c}
+    table{width:100%;border-collapse:collapse;margin-top:30px}
+    th,td{padding:14px;text-align:center;border-bottom:1px solid #27272a;font-size:16px}
+    th{background:#111827;color:#e11d48}
+    .hidden{display:none}
+    .actions{display:flex;gap:10px;margin-top:20px;flex-wrap:wrap}
+  </style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <img src="logo.png" alt="Sagaz Motors" />
+    <h1>Simulador de Parcelamento</h1>
+  </div>
+
+  <div class="inputs">
+    <div>
+      <label>Nome do Cliente</label>
+      <input type="text" id="cliente" placeholder="Nome do cliente" />
+    </div>
+    <div>
+      <label>WhatsApp do Cliente</label>
+      <input type="tel" id="whats" placeholder="DDD + número" />
+    </div>
+    <div>
+      <label>Valor do Produto (R$)</label>
+      <input type="number" id="valor" value="10000" />
+    </div>
+    <div id="freteBox" class="hidden">
+      <label>Frete (interno)</label>
+      <input type="number" id="frete" value="500" />
+    </div>
+    <div id="taxaBox" class="hidden">
+      <label>Taxa de Juros Mensal (%)</label>
+      <input type="number" id="taxa" value="1.8" step="0.01" />
+    </div>
+  </div>
+
+  <button onclick="liberarVendedor()" style="position:fixed;bottom:10px;right:10px;background:#111;color:#222;font-size:12px;padding:8px 10px;border-radius:8px">área</button>
+
+  <div class="actions hidden" id="modoBox">
+    <button onclick="modo='loja';calcular()">🏪 Sem juros (loja)</button>
+    <button onclick="modo='cliente';calcular()">👤 Com juros (cliente)</button>
+    <button onclick="enviarWhatsApp()">📲 Enviar no WhatsApp</button>
+    <button style="margin-left:auto;padding:10px 14px;font-size:13px" onclick="window.print()">📄 Gerar PDF</button>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Parcelas</th>
+        <th>Valor da Parcela</th>
+        <th class="hidden" id="colLiquido">Recebido pela loja</th>
+      </tr>
+    </thead>
+    <tbody id="tabela"></tbody>
+  </table>
+  <div class="print-footer">
+    Sagaz Motors • WhatsApp (21) 97287-1998
+  </div>
+</div>
+
+<script>
+let modo = 'loja';
+let cache = {};
+
+const valorInput = document.getElementById('valor');
+const freteInput = document.getElementById('frete');
+const taxaInput = document.getElementById('taxa');
+const whatsInput = document.getElementById('whats');
+const clienteInput = document.getElementById('cliente');
+const tabela = document.getElementById('tabela');
+
+function calcular() {
+  const valor = Number(valorInput.value) || 0;
+  const frete = freteInput ? Number(freteInput.value) || 0 : 0;
+  const taxaPercent = taxaInput ? Number(taxaInput.value) || 0 : 0;
+  const taxa = taxaPercent / 100;
+
+  tabela.innerHTML = '';
+  cache = {};
+
+  for (let p = 12; p <= 24; p++) {
+    const total = valor + frete;
+    let parcela = 0;
+    let recebido = 0;
+
+    if (modo === 'cliente') {
+      // Cliente paga os juros — loja recebe 100% do valor + frete
+      const montante = taxa > 0 ? valor * Math.pow(1 + taxa, p) : valor;
+      parcela = (montante + frete) / p;
+      recebido = total;
+    } else {
+      // Sem juros para o cliente — desconto dos juros fica com a loja
+      const montante = taxa > 0 ? valor * Math.pow(1 + taxa, p) : valor;
+      parcela = total / p;
+      const custoJuros = montante - valor;
+      recebido = (valor - custoJuros) + frete;
+    }
+
+    // evita valores negativos em casos extremos
+    recebido = Math.max(0, recebido);
+
+    cache[p] = { parcela, recebido };
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${p}x</td>
+      <td>${parcela.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+      <td class="hidden liquido">${recebido.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+    `;
+    tabela.appendChild(tr);
+  }
+}
+
+function enviarWhatsApp() {
+  const nome = clienteInput.value || 'Cliente';
+  let numero = whatsInput.value.replace(/\D/g, '');
+  if (!numero) return alert('Informe o WhatsApp do cliente');
+
+  // adiciona 55 automaticamente
+  if (!numero.startsWith('55')) numero = '55' + numero;
+
+  let mensagem = `Olá, ${nome}! 😊\nÉ um prazer atender você na Sagaz Motors.\nSegue o orçamento conforme combinado:\n\n`;
+
+  Object.keys(cache).forEach(p => {
+    mensagem += `${p}x de ${cache[p].parcela.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}\n`;
+  });
+
+  mensagem += `\nQualquer dúvida, estou à disposição! ⚡🏍️`;
+
+  const url = `https://wa.me/${numero}?text=${encodeURIComponent(mensagem)}`;
+  window.open(url, '_blank');
+}
+
+function liberarVendedor() {
+  if (prompt('Senha do vendedor:') === 'sagaz123') {
+    document.getElementById('freteBox').classList.remove('hidden');
+    document.getElementById('taxaBox').classList.remove('hidden');
+    document.getElementById('modoBox').classList.remove('hidden');
+    document.getElementById('colLiquido').classList.remove('hidden');
+    document.querySelectorAll('.liquido').forEach(e => e.classList.remove('hidden'));
+  }
+}
+
+[valorInput, freteInput, taxaInput].forEach(el => el && el.addEventListener('input', calcular));
+calcular();
+</script>
+</body>
+</html>
